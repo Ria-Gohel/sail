@@ -2,3 +2,7 @@ vendor/
 sail
 Dockerfile
 *.log
+go.mod
+go.sum
+vendor/*
+*.tar.gz
