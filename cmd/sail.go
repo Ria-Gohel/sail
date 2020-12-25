@@ -1,16 +1,19 @@
-package main
+//package main
+package trace
 
 import (
 	
 	"encoding/json"
 	"flag"
 	"fmt"
-	"log"
+	//"log"
+	//listProcess "gopaddle/sail/trace/listProcess"
+	trace "gopaddle/sail/trace"
 	"net/http"
 	"os"
 	"bytes"
 	"os/exec"
-	"io/ioutil"
+	//"io/ioutil"
 )
 
 func main() {
@@ -86,13 +89,13 @@ func main() {
 			os.Exit(1)
 		}
 		
-		values := map[string]string{"time":*dockerizeTimePtr}
+		//values := map[string]string{"time":*dockerizeTimePtr}
 		values2 := map[string]string{"osname":"ubuntu", "osver":"20.04"}
 		values4 := map[string]string{"finalimagename": *dockerizeImagePtr,"home": "/tmp"}
 		dir := [2]string{"packages.log", "pkg_install.sh"}
 		values3 := map[string][2]string{"dirs": dir}
-		jsonStr, _ := json.Marshal(values)
-		url := "http://localhost:9000/api/1/v1/startTracing?pid="+ *dockerizeTextPtr
+		//jsonStr, _ := json.Marshal(values)
+		//url := "http://localhost:9000/api/1/v1/startTracing?pid="+ *dockerizeTextPtr
 		url1 := "http://localhost:9000/api/1/v1/dockercreate"
 		url2 := "http://localhost:9000/api/1/v1/dockercopy"
 		url3 := "http://localhost:9000/api/1/v1/finalimage"
@@ -110,7 +113,7 @@ func main() {
 		if err4 != nil {
 			panic(err4)
 		}		
-		request, err := http.NewRequest("PUT", url, bytes.NewBuffer(jsonStr))
+		/*request, err := http.NewRequest("PUT", url, bytes.NewBuffer(jsonStr))
 		response, err := client.Do(request)
 		if err != nil {
 			log.Fatal(err)
@@ -121,7 +124,8 @@ func main() {
 				log.Fatal(err)
 			}
 			fmt.Print("Tracing pid = " + *dockerizeTextPtr)
-			fmt.Println("   ", response.StatusCode)
+			fmt.Println("   ", response.StatusCode)*/
+			trace.startTracing_nfs(*dockerizeTextPtr,*dockerizeTimePtr)
 			///////////////////////////////////////////////////////////////////////////////////
 			client1 := &http.Client{}
 			req, err := http.NewRequest("PUT", url1, bytes.NewBuffer(json1))
@@ -160,7 +164,7 @@ func main() {
 			fmt.Print(*dockerizeImagePtr + " created")
 			fmt.Println("   ",resp.StatusCode)
 			fmt.Println("To check the image, use command : docker image inspect " + *dockerizeImagePtr)
-		}
+		//}
 	}
 
 	if helpCommand.Parsed() {

@@ -51,6 +51,92 @@ func GetList(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+func startTracing_nfs(pid string, trace_time int) {
+
+	/* Get Single Process struct */
+	process := listProcess.GetOneProcess(pid)
+
+	/* Save process start command */
+	context.Instance().Set("proc_start",process.Cmd)
+
+	kill := fmt.Sprintf("kill %s", process.Pid)
+	log.Println(kill)
+	cmd.ExecuteAsScript(kill,"Process kill failed")
+	log.Printf("\nProcess (PID = %s) success", process.Pid)
+
+	/* strace */
+	strace := fmt.Sprintf("timeout %ds strace -e trace=file -f -o log/trace.log %s", trace_time, process.Cmd)
+	fmt.Println(strace)
+	ps := cmd.ExecBg(strace)
+
+	/* Network Tracing */
+	new_pid := ps.Process.Pid
+	processes := listProcess.ProcessList()
+	var pid_list []string
+	pid_list = append(pid_list, strconv.Itoa(new_pid))
+	for _, singleprocess := range processes {
+		if pid == singleprocess.PPid {
+			pid_list = append(pid_list, singleprocess.Pid)
+		}
+	}
+
+	network := startTrace.PortList(trace_time, pid_list)
+	network_marshall, err := json.Marshal(network)
+	if err != nil{
+		log.Println("Json Marshall failed")
+	}
+	network_json := json_util.Parse(network_marshall)
+	context.Instance().SetJSON("network",network_json)
+
+	err = ps.Wait()
+	if err != nil {
+		log.Println(err)
+	}
+
+	time.Sleep(time.Duration(trace_time)*time.Second)
+
+	os_map := context.Instance().GetJSON("os_details")
+	os_string := os_map.ToString()
+	os_details := startTrace.Osdetails{}
+	json.Unmarshal([]byte(os_string), &os_details)
+
+	log.Println("File and Package list making")
+	file_list := startTrace.GetDependFiles()
+	pkg_list := startTrace.GetDependPackages(os_details.Osname, file_list)
+
+	sort.Strings(file_list)
+
+	/* Packages */
+	file, err := os.OpenFile("packages.log", os.O_APPEND|os.O_TRUNC|os.O_CREATE|os.O_WRONLY, 0644)
+	if err != nil {
+		log.Fatalf("failed creating file: %s", err)
+	}
+
+	datawriter := bufio.NewWriter(file)
+
+	for _, pkg:= range pkg_list{
+		_, _ = datawriter.WriteString(pkg)
+	}
+
+	datawriter.Flush()
+	file.Close()
+
+	/* Files */
+	file, err = os.OpenFile("files.log", os.O_APPEND|os.O_TRUNC|os.O_CREATE|os.O_WRONLY, 0644)
+	if err != nil {
+		log.Fatalf("failed creating file: %s", err)
+	}
+
+	datawriter = bufio.NewWriter(file)
+
+	for _, file := range file_list{
+		_, _ = datawriter.WriteString(file + "\n")
+	}
+
+	datawriter.Flush()
+	file.Close()
+}
+
 func StartTracing(w http.ResponseWriter, r *http.Request) {
 	os_family, os_name, os_ver := cmd.GetOS()
 	log.Printf("Possible Docker Image => %s:%s", os_name, os_ver)
@@ -76,102 +162,22 @@ func StartTracing(w http.ResponseWriter, r *http.Request) {
 	if pid == "" {
 		log.Printf("Pid: %s does not exist", pid)
 	} else {
-		/* Get Single Process struct */
-		process := listProcess.GetOneProcess(pid)
-
-		/* Save process start command */
-		context.Instance().Set("proc_start",process.Cmd)
-
-		kill := fmt.Sprintf("kill %s", process.Pid)
-		log.Println(kill)
-		cmd.ExecuteAsScript(kill,"Process kill failed")
-		log.Printf("\nProcess (PID = %s) success", process.Pid)
-
 		/* Get PUT input as json */
 		var trace_input startTrace.TraceInput
 		trace_json, err := ioutil.ReadAll(r.Body)
 		if err != nil {
 			log.Printf("Error in Json input startTracing()")
 		}
-		json.Unmarshal(trace_json, &trace_input)
 
 		/* Get trace time */
 		trace_time := trace_input.Time
 		log.Println(trace_time)
 
-		/* strace */
-		strace := fmt.Sprintf("timeout %ds strace -e trace=file -f -o log/trace.log %s", trace_time, process.Cmd)
-		fmt.Println(strace)
-		ps := cmd.ExecBg(strace)
-
-		/* Network Tracing */
-		new_pid := ps.Process.Pid
-		processes := listProcess.ProcessList()
-		var pid_list []string
-		pid_list = append(pid_list, strconv.Itoa(new_pid))
-		for _, singleprocess := range processes {
-			if pid == singleprocess.PPid {
-				pid_list = append(pid_list, singleprocess.Pid)
-			}
-		}
-
-		network := startTrace.PortList(trace_time, pid_list)
-		network_marshall, err := json.Marshal(network)
-		if err != nil{
-			log.Println("Json Marshall failed")
-		}
-
-		network_json := json_util.Parse(network_marshall)
-		context.Instance().SetJSON("network",network_json)
-
-		err = ps.Wait()
-		if err != nil {
-			log.Println(err)
-		}
-
-		time.Sleep(time.Duration(trace_time)*time.Second)
-
-		os_map := context.Instance().GetJSON("os_details")
-		os_string := os_map.ToString()
-		os_details := startTrace.Osdetails{}
-		json.Unmarshal([]byte(os_string), &os_details)
-
-		log.Println("File and Package list making")
-		file_list := startTrace.GetDependFiles()
-		pkg_list := startTrace.GetDependPackages(os_details.Osname, file_list)
-
-		sort.Strings(file_list)
-
-		/* Packages */
-		file, err := os.OpenFile("packages.log", os.O_APPEND|os.O_TRUNC|os.O_CREATE|os.O_WRONLY, 0644)
-		if err != nil {
-			log.Fatalf("failed creating file: %s", err)
-		}
-
-		datawriter := bufio.NewWriter(file)
-
-		for _, pkg:= range pkg_list{
-			_, _ = datawriter.WriteString(pkg)
-		}
-
-		datawriter.Flush()
-		file.Close()
-
-		/* Files */
-		file, err = os.OpenFile("files.log", os.O_APPEND|os.O_TRUNC|os.O_CREATE|os.O_WRONLY, 0644)
-		if err != nil {
-			log.Fatalf("failed creating file: %s", err)
-		}
-
-		datawriter = bufio.NewWriter(file)
-
-		for _, file := range file_list{
-			_, _ = datawriter.WriteString(file + "\n")
-		}
-
-		datawriter.Flush()
-		file.Close()
+		json.Unmarshal(trace_json, &trace_input)
+		startTracing_nfs(pid, trace_time)
+		
 	}
+
 }
 
 func GetPorts(w http.ResponseWriter, r *http.Request) {
