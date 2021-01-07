@@ -24,3 +24,9 @@ For the list of commands, type
 **2. Dockerize**
 ```
 ./sail dockerize --pid <pid of process> --imageName <image name you want>
+```
+
+**3. Help**
+```
+./sail help
+```
