@@ -30,3 +30,6 @@ For the list of commands, type
 ```
 ./sail help
 ```
+```
+./sail dockerize --help
+```
